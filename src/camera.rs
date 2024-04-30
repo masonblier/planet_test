@@ -1,4 +1,5 @@
 use crate::GameState;
+use crate::post_processing::PostProcessSettings;
 use bevy::{
     core_pipeline::prepass::DepthPrepass,
     prelude::*
@@ -24,6 +25,10 @@ fn setup_camera(mut commands: Commands) {
             ..Default::default()
         },
         DepthPrepass,
+        PostProcessSettings {
+            intensity: 0.02,
+            ..default()
+        },
         GameCamera { },
     ));    
 }

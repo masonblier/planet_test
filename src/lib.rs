@@ -5,12 +5,14 @@ mod camera;
 mod loading;
 mod menu;
 mod player;
+mod post_processing;
 mod world;
 
 use crate::actions::ActionsPlugin;
 use crate::camera::CameraPlugin;
 use crate::loading::LoadingPlugin;
 use crate::menu::MenuPlugin;
+use crate::post_processing::PostProcessingPlugin;
 use crate::world::LocalTerrainPlugin;
 
 use bevy::app::App;
@@ -42,6 +44,7 @@ impl Plugin for GamePlugin {
             MenuPlugin,
             ActionsPlugin,
             LocalTerrainPlugin,
+            PostProcessingPlugin,
         ));
 
         #[cfg(debug_assertions)]
