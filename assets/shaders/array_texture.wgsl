@@ -9,18 +9,37 @@
 @group(2) @binding(0) var my_array_texture: texture_2d_array<f32>;
 @group(2) @binding(1) var my_array_texture_sampler: sampler;
 
+// shader params
+const tex_scale = 10.0;
+const planet_scale = 4.0;
+
 @fragment
 fn fragment(
     @builtin(front_facing) is_front: bool,
     mesh: VertexOutput,
 ) -> @location(0) vec4<f32> {
-    let layer = i32(mesh.world_position.x) & 0x3;
+
+    let terrain_height = length(mesh.world_position) / (planet_scale / 2.0);
+
+    // grass=0 dirt=1 snow=2 sand=3
+    var layer: i32 = 3;
+    if terrain_height > 1.1 {
+        layer = 0;
+    }
+    if terrain_height > 1.18 {
+        layer = 1;
+    }
+    if terrain_height > 1.22 {
+        layer = 2;
+    }
+
+    let tex_uv = vec2<f32>(mesh.uv.x * tex_scale * planet_scale % 1.0, mesh.uv.y * tex_scale * planet_scale % 1.0);
 
     // Prepare a 'processed' StandardMaterial by sampling all textures to resolve
     // the material members
     var pbr_input: PbrInput = pbr_input_new();
 
-    pbr_input.material.base_color = textureSample(my_array_texture, my_array_texture_sampler, mesh.uv, layer);
+    pbr_input.material.base_color = textureSample(my_array_texture, my_array_texture_sampler, tex_uv, layer);
 #ifdef VERTEX_COLORS
     pbr_input.material.base_color = pbr_input.material.base_color * mesh.color;
 #endif

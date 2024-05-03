@@ -39,6 +39,8 @@ pub struct SettingsConfigAssets {
 pub struct TextureAssets {
     #[asset(path = "textures/bevy.png")]
     pub bevy: Handle<Image>,
+    #[asset(path = "textures/array_texture.png")]
+    pub array_texture: Handle<Image>,
 }
 
 // Config asset loader

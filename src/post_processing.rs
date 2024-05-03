@@ -6,31 +6,21 @@
 //! This is a fairly low level example and assumes some familiarity with rendering concepts and wgpu.
 
 use crate::GameState;
+use crate::camera::{GameCamera, GameSunLight};
+use crate::loading::{SettingsConfigAsset,SettingsConfigAssets};
 use bevy::{
     core_pipeline::{
-        core_3d::graph::{Core3d, Node3d},
-        prepass::ViewPrepassTextures,
-        fullscreen_vertex_shader::fullscreen_shader_vertex_state,
-    },
-    ecs::query::QueryItem,
-    prelude::*,
-    pbr::get_bindings,
-    render::{
+        core_3d::graph::{Core3d, Node3d}, fullscreen_vertex_shader::fullscreen_shader_vertex_state, prepass::ViewPrepassTextures
+    }, ecs::query::QueryItem, pbr::get_bindings, prelude::*, render::{
         extract_component::{
             ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
-        },
-        render_graph::{
+        }, render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
-        },
-        render_resource::{
+        }, render_resource::{
             binding_types::{sampler, texture_2d, texture_depth_2d, uniform_buffer},
             *,
-        },
-        renderer::{RenderContext, RenderDevice},
-        texture::BevyDefault,
-        view::ViewTarget,
-        RenderApp,
-    },
+        }, renderer::{RenderContext, RenderDevice}, texture::BevyDefault, view::{ViewTarget, ViewUniform, ViewUniforms}, RenderApp
+    }
 };
 
 // plugin
@@ -42,7 +32,11 @@ impl Plugin for PostProcessingPlugin {
     fn build(&self, app: &mut App) {
         app
             .add_plugins(PostProcessPlugin)
-            .add_systems(Update, update_settings.run_if(in_state(GameState::Playing)));
+            .add_systems(OnEnter(GameState::Playing), init_settings)
+            .add_systems(Update, (
+                update_settings.run_if(in_state(GameState::Playing)),
+                update_sun.run_if(in_state(GameState::Playing)),
+            ));
     }
 }
 
@@ -157,6 +151,10 @@ impl ViewNode for PostProcessNode {
         // which is expensive due to shader compilation.
         let pipeline_cache = world.resource::<PipelineCache>();
 
+        // 
+        let view_uniforms = world.resource::<ViewUniforms>();
+
+
         // Get the pipeline from the cache
         let Some(pipeline) = pipeline_cache.get_render_pipeline(post_process_pipeline.pipeline_id)
         else {
@@ -197,6 +195,7 @@ impl ViewNode for PostProcessNode {
                 // Use the sampler created for the pipeline
                 &post_process_pipeline.sampler,
                 prepass_bindings[0].as_ref().unwrap(),
+                view_uniforms.uniforms.binding().unwrap(),
                 // Set the settings binding
                 settings_binding.clone(),
             )),
@@ -251,6 +250,7 @@ impl FromWorld for PostProcessPipeline {
                     // The sampler that will be used to sample the screen texture
                     sampler(SamplerBindingType::Filtering),
                     texture_depth_2d(),
+                    uniform_buffer::<ViewUniform>(false).visibility(ShaderStages::VERTEX_FRAGMENT),
                     // The settings uniform that will control the effect
                     uniform_buffer::<PostProcessSettings>(false),
                 ),
@@ -304,25 +304,78 @@ impl FromWorld for PostProcessPipeline {
 // This is the component that will get passed to the shader
 #[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
 pub struct PostProcessSettings {
-    pub intensity: f32,
+    pub planet_scale: f32,
+    pub camera_position: Vec3,
+    pub sun_position: Vec3,
+    pub proj_mat: Mat4,
+    pub inverse_proj: Mat4,
+    pub view_mat: Mat4,
+    pub inverse_view: Mat4,
+
     // WebGL2 structs must be 16 byte aligned.
     #[cfg(feature = "webgl2")]
     _webgl2_padding: Vec3,
 }
 
-// Change the intensity over time to show that the effect is controlled from the main world
-fn update_settings(mut settings: Query<&mut PostProcessSettings>, time: Res<Time>) {
-    for mut setting in &mut settings {
-        let mut intensity = time.elapsed_seconds().sin();
-        // Make it loop periodically
-        intensity = intensity.sin();
-        // Remap it to 0..1 because the intensity can't be negative
-        intensity = intensity * 0.5 + 0.5;
-        // Scale it to a more reasonable level
-        intensity *= 0.015;
+// init settings binding
+fn init_settings(
+    mut settings: Query<&mut PostProcessSettings>, 
+    config_handles: Res<SettingsConfigAssets>,
+    config_assets: Res<Assets<SettingsConfigAsset>>,
+) {
+    if let Some(config) = config_assets.get(config_handles.settings.clone()) {
+        for mut setting in &mut settings {
+            setting.planet_scale = config.planet_scale;
+        }
+    }
+}
 
-        // Set the intensity.
-        // This will then be extracted to the render world and uploaded to the gpu automatically by the [`UniformComponentPlugin`]
-        setting.intensity = intensity;
+// update settings binding
+fn update_settings(
+    time: Res<Time>,
+    mut settings: Query<&mut PostProcessSettings>, 
+    mut camera_query: Query<(&mut Transform, &Camera), With<GameCamera>>,
+    config_handles: Res<SettingsConfigAssets>,
+    config_assets: Res<Assets<SettingsConfigAsset>>,
+) {
+    if let Some(config) = config_assets.get(config_handles.settings.clone()) {
+        for mut setting in &mut settings {
+            let camera_offset = (f32::sin(time.elapsed_seconds() * 0.5) * 0.5 + 0.5) * 
+                (config.max_distance - config.min_distance) + config.min_distance;
+
+            // update camera info in settings binding
+            for (mut camera_transform, camera) in &mut camera_query {
+                camera_transform.translation = Vec3::new(0., 0., camera_offset);
+                camera_transform.look_at(config.look_at, Vec3::Y);
+            
+                // pass render camera in because `view` during postprocessing is of a default camera
+                setting.camera_position = camera_transform.translation;
+                setting.proj_mat = camera.projection_matrix();
+                setting.inverse_proj = camera.projection_matrix().inverse();
+                setting.view_mat = camera_transform.compute_matrix();
+                setting.inverse_view = camera_transform.compute_matrix();
+            }
+        }
+    }
+}
+
+// update settings binding
+fn update_sun(
+    time: Res<Time>,
+    mut settings: Query<&mut PostProcessSettings>,
+    mut sun_query: Query<&mut Transform, With<GameSunLight>>,
+) {
+    for mut setting in &mut settings {
+        // update sun info
+        const SUN_SPEED: f32 = 0.8;
+        setting.sun_position = Vec3::new(
+            20.0 * f32::cos(time.elapsed_seconds() * SUN_SPEED),
+            2.0,
+            20.0 * f32::sin(time.elapsed_seconds() * SUN_SPEED),);
+
+        for mut sun_transform in &mut sun_query {
+            sun_transform.translation = setting.sun_position;
+            sun_transform.look_at(Vec3::splat(0.), Vec3::Y);
+        }
     }
 }
