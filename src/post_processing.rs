@@ -304,9 +304,10 @@ impl FromWorld for PostProcessPipeline {
 // This is the component that will get passed to the shader
 #[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
 pub struct PostProcessSettings {
+    pub planet_center: Vec3,
     pub planet_scale: f32,
-    pub camera_position: Vec3,
     pub sun_position: Vec3,
+    pub camera_position: Vec3,
     pub proj_mat: Mat4,
     pub inverse_proj: Mat4,
     pub view_mat: Mat4,
