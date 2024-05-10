@@ -27,6 +27,7 @@ struct PostProcessSettings {
 // consts
 const max_f32 = 99999999.99;
 const epsilon_f32 = 0.0000001;
+const pi_f32 = 3.141592653589;
 const ocean_depth_mult = 14.4;
 const ocean_alpha_mult = 24.4;
 const ocean_color_a = vec4(0.4, 1., 0.85, 1.);
@@ -126,7 +127,7 @@ fn calculate_optical_depth(
 }
 
 // statistical approximation of atmospheric scattering
-fn calculate_light(
+fn calculate_light_scattering(
     ray_origin: vec3<f32>,
     ray_direction: vec3<f32>,
     ray_length: f32,
@@ -161,6 +162,13 @@ fn calculate_light(
     return original_color * original_color_transmittance + in_scattered_light;
 }
 
+// psuedorandom helper
+fn hash2to1(p: vec2<f32>) -> f32 {
+    let p0 = fract(p * vec2<f32>(123.45, 456.78));
+    let p1 = p0 + dot(p0, p0 + 45.67);
+    return fract(p1.x * p1.y);
+}
+
 @fragment
 fn fragment(
 #ifdef MULTISAMPLED
@@ -187,11 +195,39 @@ fn fragment(
 
     // space
     if depth_value < 0.000001 {
+        // sun
         let sun_radius = 1.;
         let sun_hit = ray_sphere_intersection(settings.sun_position, sun_radius, ray_origin.xyz, ray_direction);
         if sun_hit.y > 0. {
             let sun_intensity = pow(sun_hit.y / (2. * sun_radius), 3.);
             original_color = mix(sun_cool, sun_hot, sun_intensity);
+        } else {
+            // stars
+            var psi = 0.;
+            var phi = 0.;
+            if abs(ray_direction.y) > abs(ray_direction.z) && abs(ray_direction.y) > abs(ray_direction.x) {
+                psi = atan(ray_direction.y / ray_direction.x);
+                phi = atan(ray_direction.y / ray_direction.z);
+            } else {
+                if abs(ray_direction.x) > abs(ray_direction.z) {
+                    psi = atan(ray_direction.x / ray_direction.y);
+                    phi = atan(ray_direction.x / ray_direction.z);
+                } else {
+                    psi = atan(ray_direction.z / ray_direction.x);
+                    phi = atan(ray_direction.z / ray_direction.y);
+                }
+            }
+            let px = psi*60./pi_f32;
+            let py = phi*60./pi_f32;
+            let tile_n = vec2<f32>(floor(px), floor(py));
+            let tile_pos = vec2<f32>(fract(px),fract(py));
+            let hash_n = hash2to1(tile_n);
+            let star_bright = max(1. - 60. * (sin(hash_n) * 0.5 + 0.5) * distance(tile_pos, vec2(hash_n + 0.5, fract(hash_n * 10.))), 0.);
+            original_color = vec4(
+                star_bright * (0.8 + sin(fract(hash_n * 10.)) * 0.2), 
+                star_bright * (0.6 + sin(fract(hash_n * 100.)) * 0.4), 
+                star_bright * (0.4 + sin(fract(hash_n * 1000.)) * 0.6), 
+                1.);
         }
     }
 
@@ -229,7 +265,13 @@ fn fragment(
 
     if dist_through_atmo > 0. {
         let point_in_atmo = ray_origin + ray_direction * (dist_to_atmo + epsilon_f32);
-        let light = calculate_light(point_in_atmo, ray_direction, (dist_through_atmo - epsilon_f32 * 2.), original_color.rgb, atmo_radius, dir_to_sun);
+        let light = calculate_light_scattering(
+            point_in_atmo, 
+            ray_direction, 
+            (dist_through_atmo - epsilon_f32 * 2.), 
+            original_color.rgb, 
+            atmo_radius, 
+            dir_to_sun);
         original_color = vec4<f32>(light, 1.);
     }
 

@@ -47,6 +47,7 @@ pub struct TextureAssets {
 
 #[derive(Asset, TypePath, Debug, Deserialize)]
 pub struct SettingsConfigAsset {
+    pub mouse_speed: f32,
     pub planet_scale: f32,
     pub look_at: Vec3,
     pub min_distance: f32,

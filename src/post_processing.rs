@@ -333,29 +333,18 @@ fn init_settings(
 
 // update settings binding
 fn update_settings(
-    time: Res<Time>,
     mut settings: Query<&mut PostProcessSettings>, 
-    mut camera_query: Query<(&mut Transform, &Camera), With<GameCamera>>,
-    config_handles: Res<SettingsConfigAssets>,
-    config_assets: Res<Assets<SettingsConfigAsset>>,
+    camera_query: Query<(&Transform, &Camera), With<GameCamera>>,
 ) {
-    if let Some(config) = config_assets.get(config_handles.settings.clone()) {
-        for mut setting in &mut settings {
-            let camera_offset = (f32::sin(time.elapsed_seconds() * 0.5) * 0.5 + 0.5) * 
-                (config.max_distance - config.min_distance) + config.min_distance;
-
-            // update camera info in settings binding
-            for (mut camera_transform, camera) in &mut camera_query {
-                camera_transform.translation = Vec3::new(0., 0., camera_offset);
-                camera_transform.look_at(config.look_at, Vec3::Y);
-            
-                // pass render camera in because `view` during postprocessing is of a default camera
-                setting.camera_position = camera_transform.translation;
-                setting.proj_mat = camera.projection_matrix();
-                setting.inverse_proj = camera.projection_matrix().inverse();
-                setting.view_mat = camera_transform.compute_matrix();
-                setting.inverse_view = camera_transform.compute_matrix();
-            }
+    for mut setting in &mut settings {
+        // update camera info in settings binding
+        for (camera_transform, camera) in &camera_query {
+            // pass render camera in because `view` during postprocessing is of a default camera
+            setting.camera_position = camera_transform.translation;
+            setting.proj_mat = camera.projection_matrix();
+            setting.inverse_proj = camera.projection_matrix().inverse();
+            setting.view_mat = camera_transform.compute_matrix();
+            setting.inverse_view = camera_transform.compute_matrix();
         }
     }
 }
