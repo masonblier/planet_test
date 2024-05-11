@@ -52,6 +52,8 @@ pub struct SettingsConfigAsset {
     pub look_at: Vec3,
     pub min_distance: f32,
     pub max_distance: f32,
+    pub enable_atmosphere: bool,
+    pub enable_stars: bool,
 }
 
 #[derive(Default)]

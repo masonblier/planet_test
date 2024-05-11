@@ -11,7 +11,12 @@ use crate::loading::{SettingsConfigAsset,SettingsConfigAssets};
 use bevy::{
     core_pipeline::{
         core_3d::graph::{Core3d, Node3d}, fullscreen_vertex_shader::fullscreen_shader_vertex_state, prepass::ViewPrepassTextures
-    }, ecs::query::QueryItem, pbr::get_bindings, prelude::*, render::{
+    }, 
+    ecs::query::QueryItem, 
+    input::{ButtonState, keyboard::{KeyCode, KeyboardInput}},
+    pbr::get_bindings, 
+    prelude::*, 
+    render::{
         extract_component::{
             ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
         }, render_graph::{
@@ -307,6 +312,8 @@ pub struct PostProcessSettings {
     pub planet_center: Vec3,
     pub planet_scale: f32,
     pub sun_position: Vec3,
+    pub enable_atmosphere: i32,
+    pub enable_stars: i32,
     pub camera_position: Vec3,
     pub proj_mat: Mat4,
     pub inverse_proj: Mat4,
@@ -327,6 +334,8 @@ fn init_settings(
     if let Some(config) = config_assets.get(config_handles.settings.clone()) {
         for mut setting in &mut settings {
             setting.planet_scale = config.planet_scale;
+            setting.enable_atmosphere = if config.enable_atmosphere { 1 } else { 0 };
+            setting.enable_stars = if config.enable_stars { 1 } else { 0 };
         }
     }
 }
@@ -335,6 +344,7 @@ fn init_settings(
 fn update_settings(
     mut settings: Query<&mut PostProcessSettings>, 
     camera_query: Query<(&Transform, &Camera), With<GameCamera>>,
+    mut keyboard_input_events: EventReader<KeyboardInput>,
 ) {
     for mut setting in &mut settings {
         // update camera info in settings binding
@@ -346,8 +356,19 @@ fn update_settings(
             setting.view_mat = camera_transform.compute_matrix();
             setting.inverse_view = camera_transform.compute_matrix();
         }
+
+        for event in keyboard_input_events.read() {
+            // check for settings toggles
+            if event.state == ButtonState::Pressed && event.key_code == KeyCode::KeyA {
+                setting.enable_atmosphere = if setting.enable_atmosphere == 0 { 1 } else { 0 };
+            }
+            if event.state == ButtonState::Pressed && event.key_code == KeyCode::KeyS {
+                setting.enable_stars = if setting.enable_stars == 0 { 1 } else { 0 };
+            }
+        }
     }
 }
+
 
 // update settings binding
 fn update_sun(

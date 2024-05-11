@@ -12,6 +12,8 @@ struct PostProcessSettings {
     planet_center: vec3<f32>,
     planet_scale: f32,
     sun_position: vec3<f32>,
+    enable_atmosphere: i32,
+    enable_stars: i32,
     camera_position: vec3<f32>,
     proj_mat: mat4x4<f32>,
     inverse_proj: mat4x4<f32>,
@@ -194,7 +196,7 @@ fn fragment(
     let scene_depth = -depth_ndc_to_view_z(depth_value);
 
     // space
-    if depth_value < 0.000001 {
+    if depth_value < 0.000001 && settings.enable_stars == 1 {
         // sun
         let sun_radius = 1.;
         let sun_hit = ray_sphere_intersection(settings.sun_position, sun_radius, ray_origin.xyz, ray_direction);
@@ -257,22 +259,24 @@ fn fragment(
     }
 
     // atmosphere
-    let atmo_radius = atmo_scale * settings.planet_scale / 2.;
-    let atmo_hit = ray_sphere_intersection(settings.planet_center, atmo_radius, ray_origin.xyz, ray_direction);
-    let dist_to_atmo = atmo_hit.x;
-    let surface_dist = min(scene_depth, dist_to_ocean);
-    let dist_through_atmo = min(atmo_hit.y, surface_dist - dist_to_atmo);
+    if settings.enable_atmosphere == 1 {
+        let atmo_radius = atmo_scale * settings.planet_scale / 2.;
+        let atmo_hit = ray_sphere_intersection(settings.planet_center, atmo_radius, ray_origin.xyz, ray_direction);
+        let dist_to_atmo = atmo_hit.x;
+        let surface_dist = min(scene_depth, dist_to_ocean);
+        let dist_through_atmo = min(atmo_hit.y, surface_dist - dist_to_atmo);
 
-    if dist_through_atmo > 0. {
-        let point_in_atmo = ray_origin + ray_direction * (dist_to_atmo + epsilon_f32);
-        let light = calculate_light_scattering(
-            point_in_atmo, 
-            ray_direction, 
-            (dist_through_atmo - epsilon_f32 * 2.), 
-            original_color.rgb, 
-            atmo_radius, 
-            dir_to_sun);
-        original_color = vec4<f32>(light, 1.);
+        if dist_through_atmo > 0. {
+            let point_in_atmo = ray_origin + ray_direction * (dist_to_atmo + epsilon_f32);
+            let light = calculate_light_scattering(
+                point_in_atmo, 
+                ray_direction, 
+                (dist_through_atmo - epsilon_f32 * 2.), 
+                original_color.rgb, 
+                atmo_radius, 
+                dir_to_sun);
+            original_color = vec4<f32>(light, 1.);
+        }
     }
 
     // Sample each color channel with an arbitrary shift

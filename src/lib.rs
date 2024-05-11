@@ -4,6 +4,7 @@ mod actions;
 mod camera;
 mod loading;
 mod menu;
+mod overlay_ui;
 mod player;
 mod post_processing;
 mod world;
@@ -12,6 +13,7 @@ use crate::actions::ActionsPlugin;
 use crate::camera::CameraPlugin;
 use crate::loading::LoadingPlugin;
 use crate::menu::MenuPlugin;
+use crate::overlay_ui::OverlayUiPlugin;
 use crate::post_processing::PostProcessingPlugin;
 use crate::world::LocalTerrainPlugin;
 
@@ -42,6 +44,7 @@ impl Plugin for GamePlugin {
             LoadingPlugin,
             CameraPlugin,
             MenuPlugin,
+            OverlayUiPlugin,
             ActionsPlugin,
             LocalTerrainPlugin,
             PostProcessingPlugin,
